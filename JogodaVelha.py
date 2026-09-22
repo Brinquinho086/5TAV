@@ -178,24 +178,42 @@ def jogada_customizada(tabuleiro, jogador_atual):
     else: return posicoes_vazias[0]
 
 # 4. Agente Inteligente
-def jogada_agente(tabuleiro, memoria):
+def jogada_agente(tabuleiro, memoria, jogador_atual):
     estado = str(tabuleiro)
     posicoes_vazias = [i for i, valor in enumerate(tabuleiro) if valor == 0]
     
-    if estado in memoria:
-        melhor_jogada = None
-        maior_pontuacao = -float('inf')
+    melhores_jogadas = []
+    maior_pontuacao = -float('inf')
+    
+    for jogada in posicoes_vazias:
+        jogada_str = str(jogada)
         
-        for jogada_str, pontuacao in memoria[estado].items():
-            jogada = int(jogada_str)
-            if jogada in posicoes_vazias and pontuacao > maior_pontuacao:
-                maior_pontuacao = pontuacao
-                melhor_jogada = jogada
-                
-        if melhor_jogada is not None:
-            return melhor_jogada
+        # 1. O que o agente aprendeu jogando diretamente nesta casa no passado
+        pontuacao_direta = memoria.get(estado, {}).get(jogada_str, 0)
+        
+        # 2. ESPIANDO O FUTURO (A sua ideia genial)
+        # O agente simula colocar a peça dele no tabuleiro
+        tabuleiro_futuro = tabuleiro.copy()
+        tabuleiro_futuro[jogada] = jogador_atual
+        estado_futuro = str(tabuleiro_futuro)
+        
+        pontuacao_futura = 0
+        if estado_futuro in memoria and memoria[estado_futuro]:
+            # Pega a melhor nota possível que o OPONENTE tem no turno seguinte
+            melhor_nota_oponente = max(memoria[estado_futuro].values())
+            # Se a nota é boa para o oponente, é péssima para o agente, então invertemos o sinal!
+            pontuacao_futura = melhor_nota_oponente * -1
             
-    return random.choice(posicoes_vazias)
+        # A nota final da casa avalia o histórico dela somado à armadilha que cria para o oponente
+        pontuacao_final = pontuacao_direta + pontuacao_futura
+        
+        if pontuacao_final > maior_pontuacao:
+            maior_pontuacao = pontuacao_final
+            melhores_jogadas = [jogada]
+        elif pontuacao_final == maior_pontuacao:
+            melhores_jogadas.append(jogada)
+            
+    return random.choice(melhores_jogadas)
 
 # --- REGRAS E EXECUÇÃO ---
 
@@ -214,7 +232,7 @@ def escolher_tipo_jogador(nome_jogador):
     print(f"\nEscolha o controle para o jogador {nome_jogador}:")
     print("1 - Humano")
     print("2 - Máquina (Jogadas Aleatórias)")
-    print("3 - Máquina (Sua IA)")
+    print("3 - Jogador Fera (Personalizável)")
     print("4 - Agente Inteligente (Aprende com Experiência)")
     
     while True:
@@ -251,7 +269,7 @@ def jogar_partida(tipo_X, tipo_O, memoria, visual=True, jogador_inicial=1):
             jogada = jogada_customizada(tabuleiro, jogador_atual)
         elif tipo_atual == 4:
             if visual: time.sleep(1)
-            jogada = jogada_agente(tabuleiro, memoria)
+            jogada = jogada_agente(tabuleiro, memoria, jogador_atual) 
             
         # Registra o histórico da jogada (para a memória do Agente)
         if jogador_atual == 1:
@@ -278,22 +296,25 @@ def jogar_partida(tipo_X, tipo_O, memoria, visual=True, jogador_inicial=1):
 # --- ATUALIZADORES (RODAM NO FINAL DAS PARTIDAS) ---
 
 def processar_memoria(tipo_X, tipo_O, resultado, historico_X, historico_O, memoria):
-    """Distribui as recompensas (+2, +1, -2) na memória baseada no resultado da partida."""
+   
+    # Aprende com as jogadas do X (Apenas se o X for o Agente Inteligente)
     if tipo_X == 4:
-        pontos = 2 if resultado == 1 else (1 if resultado == 0 else -2)
+        pontos_X = 2 if resultado == 1 else (1 if resultado == 0 else -2)
         for estado, jogada in historico_X:
             jogada_str = str(jogada)
             if estado not in memoria: memoria[estado] = {}
-            if jogada_str not in memoria[estado]: memoria[estado][jogada_str] = 0
-            memoria[estado][jogada_str] += pontos
+            nota_atual = memoria[estado].get(jogada_str, 0)
+            # Fórmula Q-Learning: Novo valor = Valor Atual + 50% da (Recompensa - Valor Atual)
+            memoria[estado][jogada_str] = round(nota_atual + 0.5 * (pontos_X - nota_atual), 3)
             
+    # Aprende com as jogadas do O (Apenas se o O for o Agente Inteligente)
     if tipo_O == 4:
-        pontos = 2 if resultado == -1 else (1 if resultado == 0 else -2)
+        pontos_O = 2 if resultado == -1 else (1 if resultado == 0 else -2)
         for estado, jogada in historico_O:
             jogada_str = str(jogada)
             if estado not in memoria: memoria[estado] = {}
-            if jogada_str not in memoria[estado]: memoria[estado][jogada_str] = 0
-            memoria[estado][jogada_str] += pontos
+            nota_atual = memoria[estado].get(jogada_str, 0)
+            memoria[estado][jogada_str] = round(nota_atual + 0.5 * (pontos_O - nota_atual), 3)
 
 def processar_matriz_final(resultado, tabuleiro_final, matriz):
     """Registra o tabuleiro final na matriz de estatísticas."""
