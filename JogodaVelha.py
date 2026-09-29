@@ -2,10 +2,7 @@ import random
 import time
 import os
 import json
-
-# =======================================================
-# SISTEMA DE MEMÓRIA E ARQUIVOS (AGENTE INTELIGENTE)
-# =======================================================
+import matplotlib.pyplot as plt
 
 ARQUIVO_MEMORIA = 'memoria_agente.txt'
 ARQUIVO_MATRIZ = 'resultados_finais.txt'
@@ -367,15 +364,93 @@ def modo_teste():
     vitorias_O = 0
     empates = 0
 
-    # Carrega arquivos apenas uma vez para o teste ser extremamente rápido
     memoria = carregar_memoria()
     matriz = carregar_matriz()
 
     print("\nIniciando simulações...")
     tempo_inicio = time.time()
 
-    # Define o passo de feedback (10% das partidas, mínimo de 1)
     passo_feedback = max(1, int(qtd * 0.10))
+    
+    # --- VARIÁVEIS DO GRÁFICO ---
+    passo_grafico = max(1, qtd // 100) # Cria 100 pontos de medição no gráfico
+    eixo_x = []
+    hist_X = []
+    hist_O = []
+    hist_Empate = []
+    
+    lote_X = 0
+    lote_O = 0
+    lote_Empate = 0
+
+    for i in range(1, qtd + 1):
+        resultado, hist_X_partida, hist_O_partida, tab_final = jogar_partida(tipo_X, tipo_O, memoria, visual=False, jogador_inicial=1)
+        
+        # Contabilidade Geral e por Lote
+        if resultado == 1: 
+            vitorias_X += 1
+            lote_X += 1
+        elif resultado == -1: 
+            vitorias_O += 1
+            lote_O += 1
+        else: 
+            empates += 1
+            lote_Empate += 1
+        
+        processar_memoria(tipo_X, tipo_O, resultado, hist_X_partida, hist_O_partida, memoria)
+        processar_matriz_final(resultado, tab_final, matriz)
+            
+        # Registra os dados para o gráfico a cada lote
+        if i % passo_grafico == 0 or i == qtd:
+            total_lote = lote_X + lote_O + lote_Empate
+            eixo_x.append(i)
+            # Calcula a porcentagem do que aconteceu neste pequeno lote
+            hist_X.append((lote_X / total_lote) * 100)
+            hist_O.append((lote_O / total_lote) * 100)
+            hist_Empate.append((lote_Empate / total_lote) * 100)
+            
+            # Zera o lote para a próxima medição
+            lote_X = 0
+            lote_O = 0
+            lote_Empate = 0
+
+        if i % passo_feedback == 0:
+            print(f"[{i} / {qtd}] partidas processadas...")
+
+    salvar_memoria(memoria)
+    salvar_matriz(matriz)
+    tempo_fim = time.time()
+
+    print("\n" + "="*30)
+    print("📊 RESULTADOS DA SIMULAÇÃO 📊")
+    print("="*30)
+    print(f"Total de partidas: {qtd}")
+    print(f"Tempo de execução: {tempo_fim - tempo_inicio:.2f} segundos")
+    print(f"Vitórias do X:     {vitorias_X} ({(vitorias_X/qtd)*100:.1f}%)")
+    print(f"Vitórias do O:     {vitorias_O} ({(vitorias_O/qtd)*100:.1f}%)")
+    print(f"Empates:           {empates} ({(empates/qtd)*100:.1f}%)")
+    print("="*30)
+    print("-> Inteligência e Matriz foram salvas nos arquivos .txt.")
+    
+    # --- GERAÇÃO DO GRÁFICO VISUAL ---
+    print("-> Gerando gráfico de evolução...")
+    plt.figure(figsize=(10, 6))
+    plt.plot(eixo_x, hist_X, label='Vitórias X', color='#2ca02c', linewidth=2) # Verde
+    plt.plot(eixo_x, hist_O, label='Vitórias O', color='#d62728', linewidth=2) # Vermelho
+    plt.plot(eixo_x, hist_Empate, label='Empates', color='#1f77b4', linewidth=2) # Azul
+    
+    plt.title('Evolução do Desempenho ao Longo das Partidas', fontsize=14, fontweight='bold')
+    plt.xlabel('Número de Partidas Jogadas', fontsize=12)
+    plt.ylabel('Taxa de Ocorrência no Lote (%)', fontsize=12)
+    plt.legend(loc='upper right')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    
+    # Salva a imagem na mesma pasta do arquivo Python
+    plt.savefig('grafico_aprendizado.png', dpi=300, bbox_inches='tight')
+    print("-> Gráfico 'grafico_aprendizado.png' salvo com sucesso!")
+    
+    # Exibe o gráfico na tela
+    plt.show()
 
     for i in range(1, qtd + 1):
         resultado, hist_X, hist_O, tab_final = jogar_partida(tipo_X, tipo_O, memoria, visual=False, jogador_inicial=1)
